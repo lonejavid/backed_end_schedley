@@ -1,0 +1,24 @@
+# Dependencies
+node_modules
+
+# Env and secrets (do not commit)
+.env
+.env.*
+!.env.example
+
+# Build output
+dist
+
+# Local SQLite DB (dev data)
+*.sqlite
+schedley.sqlite
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea
+*.sw?

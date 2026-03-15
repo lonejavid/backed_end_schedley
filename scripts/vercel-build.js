@@ -47,7 +47,7 @@ fs.writeFileSync(
       runtime: 'nodejs20.x',
       handler: 'dist/main.js',
       launcherType: 'Nodejs',
-      shouldAddHelpers: false,
+      shouldAddHelpers: true,
     },
     null,
     2,

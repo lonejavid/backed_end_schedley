@@ -53,50 +53,65 @@ function handler(
   } & unknown,
   res: unknown,
 ): void {
-  const rawUrl = req.url ?? '';
-  let url = rawUrl.split('?')[0];
-  const method = (req.method ?? 'GET').toUpperCase();
+  const rawUrl = typeof (req as { url?: string }).url === 'string' ? (req as { url: string }).url : '';
+  let pathname = rawUrl.split('?')[0];
 
-  // Vercel rewrite sends original path as __path query param (see scripts/vercel-build.js).
-  // Prefer req.query.__path (if helpers added), then parse from req.url (raw Node has full url).
+  // Vercel rewrite sends original path as __path query param. Read from every possible source:
+  // 1. req.query.__path (when shouldAddHelpers is true)
+  // 2. req.url query string (when raw request has ?__path=...)
+  // 3. x-invoke-path / x-url / x-vercel-url headers (some runtimes set these)
   const queryPath = req.query && (req.query.__path as string | string[] | undefined);
-  const pathFromQuery =
+  const fromQuery =
     typeof queryPath === 'string' ? queryPath : Array.isArray(queryPath) ? queryPath[0] : undefined;
-  const pathFromUrl = rawUrl.match(/[?&]__path=([^&]*)/);
-  const pathParam = pathFromQuery ?? (pathFromUrl ? pathFromUrl[1] : null);
+  const fromUrlMatch = rawUrl.match(/[?&]__path=([^&]*)/);
+  const fromUrl = fromUrlMatch ? fromUrlMatch[1] : null;
+  const getHeader = (name: string): string | undefined => {
+    const h = req.headers?.[name.toLowerCase()] ?? req.headers?.[name];
+    if (typeof h === 'string') return h;
+    if (Array.isArray(h) && h[0]) return h[0];
+    return undefined;
+  };
+  const fromHeader =
+    getHeader('x-invoke-path') ?? getHeader('x-url') ?? getHeader('x-vercel-original-url');
+
+  const pathParam = fromQuery ?? fromUrl ?? fromHeader;
 
   if (pathParam != null && String(pathParam).trim() !== '') {
     try {
-      url = decodeURIComponent(String(pathParam));
+      pathname = decodeURIComponent(String(pathParam).trim());
     } catch {
-      url = String(pathParam);
+      pathname = String(pathParam).trim();
     }
-    if (url && !url.startsWith('/')) url = '/' + url;
-    if (req.query && '__path' in req.query) delete req.query.__path;
-    let restQuery = '';
-    if (req.query && typeof req.query === 'object') {
-      const params = new URLSearchParams();
-      for (const [k, v] of Object.entries(req.query)) {
-        if (v !== undefined && v !== null)
-          params.set(k, Array.isArray(v) ? v[0] : String(v));
-      }
-      restQuery = params.toString();
-    } else {
-      const qi = rawUrl.indexOf('?');
-      if (qi >= 0) {
-        const params = new URLSearchParams(rawUrl.slice(qi));
-        params.delete('__path');
-        restQuery = params.toString();
-      }
-    }
-    req.url = url + (restQuery ? '?' + restQuery : '');
+    if (pathname && !pathname.startsWith('/')) pathname = '/' + pathname;
   }
 
-  // Ensure /api prefix for routes that don't have it
-  if (url && !url.startsWith('/api')) {
-    const base = '/api' + (url.startsWith('/') ? url : '/' + url);
-    const q = (req.url ?? '').indexOf('?');
-    req.url = q >= 0 ? base + (req.url as string).slice(q) : base;
+  // Ensure /api prefix for non-api paths (e.g. / -> /api, /health -> /api/health)
+  if (pathname && !pathname.startsWith('/api')) {
+    pathname = '/api' + (pathname.startsWith('/') ? pathname : '/' + pathname);
+  }
+
+  // Build final URL for Express: pathname + query (without __path)
+  let queryStr = '';
+  if (req.query && typeof req.query === 'object') {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(req.query)) {
+      if (k === '__path') continue;
+      if (v !== undefined && v !== null)
+        params.set(k, Array.isArray(v) ? v[0] : String(v));
+    }
+    queryStr = params.toString();
+  } else if (rawUrl.includes('?')) {
+    const params = new URLSearchParams(rawUrl.slice(rawUrl.indexOf('?')));
+    params.delete('__path');
+    queryStr = params.toString();
+  }
+  const resolvedUrl = pathname + (queryStr ? '?' + queryStr : '');
+
+  // Force Express to see this URL (override getters on Vercel-wrapped request)
+  try {
+    Object.defineProperty(req, 'url', { value: resolvedUrl, writable: true, configurable: true });
+  } catch {
+    (req as Record<string, unknown>).url = resolvedUrl;
   }
 
   appPromise

@@ -8,6 +8,7 @@ node_modules
 
 # Build output
 dist
+.vercel
 
 # Local SQLite DB (dev data)
 *.sqlite

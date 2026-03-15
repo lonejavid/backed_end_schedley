@@ -1,11 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "buildCommand": "npm run build",
-  "builds": [
-    { "src": "dist/main.js", "use": "@vercel/node" }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "dist/main.js" }
-  ]
+  "buildCommand": "node scripts/vercel-build.js"
 }

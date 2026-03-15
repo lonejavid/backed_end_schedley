@@ -5,7 +5,6 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "vercel-build": "nest build",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",

@@ -46,10 +46,10 @@ export class EventType {
   @Column({ name: 'access_specifier', type: 'varchar', default: 'PUBLIC' })
   accessSpecifier: string;
 
-  @Column({ name: 'booking_start_date', type: 'datetime', nullable: true })
+  @Column({ name: 'booking_start_date', type: 'timestamp', nullable: true })
   bookingStartDate: Date | null;
 
-  @Column({ name: 'booking_end_date', type: 'datetime', nullable: true })
+  @Column({ name: 'booking_end_date', type: 'timestamp', nullable: true })
   bookingEndDate: Date | null;
 
   @Column({ name: 'minimum_notice', type: 'int', nullable: true })

@@ -45,6 +45,7 @@ import { Integration } from './integrations/entities/integration.entity';
             url,
             entities,
             synchronize: true,
+            ssl: config.get<string>('database.ssl') === 'true' ? { rejectUnauthorized: false } : false,
           };
         }
         return {
@@ -56,6 +57,7 @@ import { Integration } from './integrations/entities/integration.entity';
           database: String(config.get('database.database') ?? 'schedley'),
           entities,
           synchronize: true,
+          ssl: config.get<string>('database.ssl') === 'true' ? { rejectUnauthorized: false } : false,
         };
       },
       inject: [ConfigService],

@@ -4,8 +4,8 @@
  */
 const path = require('path');
 
-// Resolve dist/main from project root (Netlify runs with repo root as cwd)
-const mainPath = path.resolve(__dirname, '../../dist/main.js');
+// dist/ is copied into netlify/functions/ during build, so it sits next to server.js
+const mainPath = path.resolve(__dirname, 'dist/main.js');
 const { bootstrap } = require(mainPath);
 const serverless = require('serverless-http');
 

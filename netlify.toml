@@ -1,6 +1,6 @@
 # Netlify config for NestJS backend (Schedley API)
 [build]
-  command = "npm run build"
+  command = "npm run build && cp -r dist netlify/functions/"
   publish = "dist"
   functions = "netlify/functions"
 

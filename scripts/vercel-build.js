@@ -63,7 +63,7 @@ fs.writeFileSync(
       version: 3,
       routes: [
         { handle: 'filesystem' },
-        { src: '/(.*)', dest: '/index' },
+        { src: '/(.*)', dest: '/index?__path=/$1' },
       ],
     },
     null,

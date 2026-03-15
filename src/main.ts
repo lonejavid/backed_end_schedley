@@ -44,12 +44,35 @@ export async function bootstrap(): Promise<INestApplication> {
 // Vercel serverless: export a handler that forwards (req, res) to the Nest app. APIs only respond after DB is connected.
 const appPromise = bootstrap();
 
-function handler(req: { url?: string; method?: string } & unknown, res: unknown): void {
-  const url = req.url ?? '';
+function handler(req: { url?: string; method?: string; headers?: Record<string, string | string[] | undefined> } & unknown, res: unknown): void {
+  let url = (req.url ?? '').split('?')[0];
   const method = (req.method ?? 'GET').toUpperCase();
-  // Vercel api folder may strip /api prefix; ensure Express sees full path
+  // Vercel rewrite sends original path as __path query param (see scripts/vercel-build.js)
+  const rawUrl = req.url ?? '';
+  const pathMatch = rawUrl.includes('__path=') && rawUrl.match(/[?&]__path=([^&]*)/);
+  if (pathMatch) {
+    try {
+      url = decodeURIComponent(pathMatch[1]);
+    } catch {
+      url = pathMatch[1];
+    }
+    if (url && !url.startsWith('/')) url = '/' + url;
+    // Strip __path from query so Express doesn't see it
+    const q = rawUrl.indexOf('?');
+    if (q >= 0) {
+      const params = new URLSearchParams(rawUrl.slice(q));
+      params.delete('__path');
+      const rest = params.toString();
+      req.url = url + (rest ? '?' + rest : '');
+    } else {
+      req.url = url;
+    }
+  }
+  // Ensure /api prefix for routes that don't have it
   if (url && !url.startsWith('/api')) {
-    req.url = '/api' + (url.startsWith('/') ? url : '/' + url);
+    const base = '/api' + (url.startsWith('/') ? url : '/' + url);
+    const q = (req.url ?? '').indexOf('?');
+    req.url = q >= 0 ? base + (req.url as string).slice(q) : base;
   }
   appPromise
     .then((app) => {

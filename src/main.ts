@@ -42,7 +42,7 @@ if (require.main === module) {
   bootstrap().then((app) => {
     const config = app.get(ConfigService);
     // Vercel sets PORT; otherwise use config or default
-    const port = Number(process.env.PORT) || config.get<number>('port') ?? 5000;
+    const port = Number(process.env.PORT) || (config.get<number>('port') ?? 5000);
     return app.listen(port).then(() => {
       console.log(`[Schedley] Listening on port ${port}`);
     });

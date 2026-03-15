@@ -44,36 +44,61 @@ export async function bootstrap(): Promise<INestApplication> {
 // Vercel serverless: export a handler that forwards (req, res) to the Nest app. APIs only respond after DB is connected.
 const appPromise = bootstrap();
 
-function handler(req: { url?: string; method?: string; headers?: Record<string, string | string[] | undefined> } & unknown, res: unknown): void {
-  let url = (req.url ?? '').split('?')[0];
-  const method = (req.method ?? 'GET').toUpperCase();
-  // Vercel rewrite sends original path as __path query param (see scripts/vercel-build.js)
+function handler(
+  req: {
+    url?: string;
+    method?: string;
+    headers?: Record<string, string | string[] | undefined>;
+    query?: Record<string, string | string[]>;
+  } & unknown,
+  res: unknown,
+): void {
   const rawUrl = req.url ?? '';
-  const pathMatch = rawUrl.includes('__path=') && rawUrl.match(/[?&]__path=([^&]*)/);
-  if (pathMatch) {
+  let url = rawUrl.split('?')[0];
+  const method = (req.method ?? 'GET').toUpperCase();
+
+  // Vercel rewrite sends original path as __path query param (see scripts/vercel-build.js).
+  // Prefer req.query.__path (if helpers added), then parse from req.url (raw Node has full url).
+  const queryPath = req.query && (req.query.__path as string | string[] | undefined);
+  const pathFromQuery =
+    typeof queryPath === 'string' ? queryPath : Array.isArray(queryPath) ? queryPath[0] : undefined;
+  const pathFromUrl = rawUrl.match(/[?&]__path=([^&]*)/);
+  const pathParam = pathFromQuery ?? (pathFromUrl ? pathFromUrl[1] : null);
+
+  if (pathParam != null && String(pathParam).trim() !== '') {
     try {
-      url = decodeURIComponent(pathMatch[1]);
+      url = decodeURIComponent(String(pathParam));
     } catch {
-      url = pathMatch[1];
+      url = String(pathParam);
     }
     if (url && !url.startsWith('/')) url = '/' + url;
-    // Strip __path from query so Express doesn't see it
-    const q = rawUrl.indexOf('?');
-    if (q >= 0) {
-      const params = new URLSearchParams(rawUrl.slice(q));
-      params.delete('__path');
-      const rest = params.toString();
-      req.url = url + (rest ? '?' + rest : '');
+    if (req.query && '__path' in req.query) delete req.query.__path;
+    let restQuery = '';
+    if (req.query && typeof req.query === 'object') {
+      const params = new URLSearchParams();
+      for (const [k, v] of Object.entries(req.query)) {
+        if (v !== undefined && v !== null)
+          params.set(k, Array.isArray(v) ? v[0] : String(v));
+      }
+      restQuery = params.toString();
     } else {
-      req.url = url;
+      const qi = rawUrl.indexOf('?');
+      if (qi >= 0) {
+        const params = new URLSearchParams(rawUrl.slice(qi));
+        params.delete('__path');
+        restQuery = params.toString();
+      }
     }
+    req.url = url + (restQuery ? '?' + restQuery : '');
   }
+
   // Ensure /api prefix for routes that don't have it
   if (url && !url.startsWith('/api')) {
     const base = '/api' + (url.startsWith('/') ? url : '/' + url);
     const q = (req.url ?? '').indexOf('?');
     req.url = q >= 0 ? base + (req.url as string).slice(q) : base;
   }
+
   appPromise
     .then((app) => {
       const expressApp = app.getHttpAdapter().getInstance();

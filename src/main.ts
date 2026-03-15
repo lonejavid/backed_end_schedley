@@ -45,6 +45,13 @@ export async function bootstrap(): Promise<INestApplication> {
 // Vercel serverless handler
 const appPromise = bootstrap();
 
+function getHeader(req: { headers?: Record<string, string | string[] | undefined> }, name: string): string | undefined {
+  const h = req.headers?.[name.toLowerCase()] ?? req.headers?.[name];
+  if (typeof h === 'string') return h;
+  if (Array.isArray(h) && h[0]) return h[0];
+  return undefined;
+}
+
 function resolvePathname(req: {
   url?: string;
   query?: Record<string, string | string[]>;
@@ -53,43 +60,59 @@ function resolvePathname(req: {
 }): string {
   const rawUrl = typeof req.url === 'string' ? req.url : '';
 
-  // --- Step 1: Try __path query param first (set by vercel-build.js route rewrite) ---
+  // --- Step 0: Vercel often sends original URL/path in headers; use these first ---
+  const vercelUrl = getHeader(req, 'x-vercel-url');
+  if (vercelUrl) {
+    try {
+      const pathname = new URL(vercelUrl.startsWith('http') ? vercelUrl : `https://x${vercelUrl}`).pathname;
+      if (pathname && pathname !== '/index') return pathname;
+    } catch {
+      // fall through
+    }
+  }
+  const invokePath = getHeader(req, 'x-invoke-path') ?? getHeader(req, 'x-url') ?? getHeader(req, 'x-original-url');
+  if (invokePath && invokePath.trim()) {
+    const p = invokePath.trim();
+    return p.startsWith('/') ? p : '/' + p;
+  }
+
+  // --- Step 1: Vercel route is now /index/$1 so path comes in req.url as /index/api/health (or /index for root) ---
+  if (rawUrl.startsWith('/index')) {
+    const pathPart = rawUrl.split('?')[0];
+    const afterIndex = pathPart === '/index' ? '' : pathPart.slice(6); // '/index'.length === 6
+    const p = afterIndex ? (afterIndex.startsWith('/') ? afterIndex : '/' + afterIndex) : '/';
+    if (p !== '/index') return p;
+  }
+
+  // --- Step 2: __path query (legacy / fallback) ---
   const queryPath = req.query?.__path;
   const fromQuery =
-    typeof queryPath === 'string'
-      ? queryPath
-      : Array.isArray(queryPath)
-      ? queryPath[0]
-      : undefined;
-
-  // Also check raw URL query string for __path (in case req.query isn't populated yet)
+    typeof queryPath === 'string' ? queryPath : Array.isArray(queryPath) ? queryPath[0] : undefined;
   const fromUrlMatch = rawUrl.match(/[?&]__path=([^&]*)/);
   const fromUrl = fromUrlMatch ? decodeURIComponent(fromUrlMatch[1]) : undefined;
-
   const pathParam = fromQuery ?? fromUrl;
-
   if (pathParam && pathParam.trim()) {
     let p = pathParam.trim();
     if (!p.startsWith('/')) p = '/' + p;
-    return p; // Use exactly as-is — already the correct full path (e.g. /api/health)
+    return p;
   }
 
-  // --- Step 2: Parse from req.url ---
-  if (rawUrl) {
-    // Handle full URLs (e.g. https://api.schedley.com/api/health)
-    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
-      try {
-        return new URL(rawUrl).pathname;
-      } catch {
-        // fall through
-      }
+  // --- Step 3: Full URL in req.url ---
+  if (rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
+    try {
+      return new URL(rawUrl).pathname || '/';
+    } catch {
+      // fall through
     }
-    // Normal path-only URL
+  }
+
+  // --- Step 4: Path-only req.url (not /index) ---
+  if (rawUrl) {
     const p = rawUrl.split('?')[0];
     if (p && p !== '/index') return p;
   }
 
-  // --- Step 3: Fallback to req.path ---
+  // --- Step 5: req.path ---
   if (typeof req.path === 'string' && req.path.trim()) {
     const p = req.path.trim();
     return p.startsWith('/') ? p : '/' + p;

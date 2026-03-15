@@ -39,7 +39,12 @@ export async function bootstrap(): Promise<INestApplication> {
 // Vercel serverless: export a handler that forwards (req, res) to the Nest app
 const appPromise = bootstrap();
 
-function handler(req: unknown, res: unknown): void {
+function handler(req: { url?: string } & unknown, res: unknown): void {
+  // Vercel api folder may strip /api prefix; ensure Express sees full path
+  const url = req.url ?? '';
+  if (url && !url.startsWith('/api')) {
+    req.url = '/api' + (url.startsWith('/') ? url : '/' + url);
+  }
   appPromise.then((app) => {
     const expressApp = app.getHttpAdapter().getInstance();
     expressApp(req, res);

@@ -149,6 +149,14 @@ function handler(
     pathname = pathname.slice(0, -1);
   }
 
+  // Vercel: if the request looks like a health check, force exact path so Nest always matches
+  if (process.env.VERCEL && (rawUrl.includes('health') || pathname.includes('health'))) {
+    pathname = '/api/health';
+  }
+  if (process.env.VERCEL && (rawUrl === '/api' || pathname === '/api' || rawUrl.endsWith('/api'))) {
+    pathname = '/api';
+  }
+
   // Build query string, stripping __path
   let queryStr = '';
   if (req.query && typeof req.query === 'object') {

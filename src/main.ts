@@ -107,11 +107,23 @@ function handler(
   }
   const resolvedUrl = pathname + (queryStr ? '?' + queryStr : '');
 
-  // Force Express to see this URL (override getters on Vercel-wrapped request)
+  // Force Express to see this URL: remove any getter then define (Vercel may use getters)
+  const reqRecord = req as Record<string, unknown>;
   try {
+    delete reqRecord.url;
     Object.defineProperty(req, 'url', { value: resolvedUrl, writable: true, configurable: true });
   } catch {
-    (req as Record<string, unknown>).url = resolvedUrl;
+    reqRecord.url = resolvedUrl;
+  }
+  if ('originalUrl' in req) {
+    try {
+      delete (req as Record<string, unknown>).originalUrl;
+      Object.defineProperty(req, 'originalUrl', { value: resolvedUrl, writable: true, configurable: true });
+    } catch {
+      (req as Record<string, unknown>).originalUrl = resolvedUrl;
+    }
+  } else {
+    (req as Record<string, unknown>).originalUrl = resolvedUrl;
   }
 
   appPromise

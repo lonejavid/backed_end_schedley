@@ -56,6 +56,13 @@ fs.writeFileSync(
 
 fs.mkdirSync(path.join(outDir, 'static'), { recursive: true });
 
+// Symlink /api/health -> same handler so req.url is naturally /api/health (no __path needed)
+const apiDir = path.join(outDir, 'functions', 'api');
+fs.mkdirSync(apiDir, { recursive: true });
+const healthFuncLink = path.join(apiDir, 'health.func');
+if (fs.existsSync(healthFuncLink)) fs.unlinkSync(healthFuncLink);
+fs.symlinkSync(path.join('..', 'index.func'), healthFuncLink);
+
 fs.writeFileSync(
   path.join(outDir, 'config.json'),
   JSON.stringify(
@@ -63,6 +70,7 @@ fs.writeFileSync(
       version: 3,
       routes: [
         { handle: 'filesystem' },
+        { src: '/api/health', dest: '/api/health' },
         { src: '/(.*)', dest: '/index?__path=/$1' },
       ],
     },

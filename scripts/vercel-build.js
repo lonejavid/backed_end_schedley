@@ -56,8 +56,16 @@ fs.writeFileSync(
 
 fs.mkdirSync(path.join(outDir, 'static'), { recursive: true });
 
-// Route all requests to the single index function with __path so Nest gets the correct URL.
-// (Avoids symlinked /api/health.func which can 404 on Vercel when symlinks aren't preserved.)
+// Per Vercel Build Output API: a function at functions/api/health.func is served at URL /api/health
+// and the request path the function receives is /api/health. Copy index.func so /api and /api/health
+// get the correct path without relying on rewrites.
+const apiFuncDir = path.join(outDir, 'functions', 'api.func');
+const apiHealthFuncDir = path.join(outDir, 'functions', 'api', 'health.func');
+copyRecursive(funcDir, apiFuncDir);
+fs.mkdirSync(path.dirname(apiHealthFuncDir), { recursive: true });
+copyRecursive(funcDir, apiHealthFuncDir);
+
+// Filesystem first (serves /api via api.func, /api/health via api/health.func); then miss → rewrite to index for all other paths.
 fs.writeFileSync(
   path.join(outDir, 'config.json'),
   JSON.stringify(
@@ -65,7 +73,8 @@ fs.writeFileSync(
       version: 3,
       routes: [
         { handle: 'filesystem' },
-        { src: '/(.*)', dest: '/index?__path=/$1' },
+        { handle: 'miss' },
+        { src: '/(.*)', dest: '/index/$1' },
       ],
     },
     null,

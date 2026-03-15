@@ -4,9 +4,10 @@ import { join } from 'path';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { INestApplication } from '@nestjs/common';
 import { AppModule } from './app.module';
 
-async function bootstrap() {
+export async function bootstrap(): Promise<INestApplication> {
   if (process.env.USE_SQLITE === 'true') {
     mkdirSync(join(process.cwd(), 'data'), { recursive: true });
   }
@@ -28,6 +29,23 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  await app.listen(config.get<number>('port') ?? 5000);
+  const port = config.get<number>('port') ?? 5000;
+  if (!process.env.VERCEL) {
+    await app.listen(port);
+  }
+  return app;
 }
-bootstrap();
+
+// Vercel serverless: export a handler that forwards (req, res) to the Nest app
+const appPromise = bootstrap();
+
+function handler(req: unknown, res: unknown): void {
+  appPromise.then((app) => {
+    const expressApp = app.getHttpAdapter().getInstance();
+    expressApp(req, res);
+  });
+}
+
+if (process.env.VERCEL) {
+  (module as NodeModule & { exports: typeof handler }).exports = handler;
+}

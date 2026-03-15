@@ -51,6 +51,11 @@ function toEventPublic(
 
 @Controller('api')
 export class PublicController {
+  @Get('health')
+  health(): { status: string; message: string } {
+    return { status: 'ok', message: 'Schedley API is running' };
+  }
+
   constructor(
     private readonly eventTypesService: EventTypesService,
     private readonly availabilityService: AvailabilityService,

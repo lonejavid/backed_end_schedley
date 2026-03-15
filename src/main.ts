@@ -41,8 +41,61 @@ export async function bootstrap(): Promise<INestApplication> {
   return app;
 }
 
-// Vercel serverless: export a handler that forwards (req, res) to the Nest app. APIs only respond after DB is connected.
+// Vercel serverless handler
 const appPromise = bootstrap();
+
+function resolvePathname(req: {
+  url?: string;
+  query?: Record<string, string | string[]>;
+  headers?: Record<string, string | string[] | undefined>;
+  path?: string;
+}): string {
+  const rawUrl = typeof req.url === 'string' ? req.url : '';
+
+  // --- Step 1: Try __path query param first (set by vercel-build.js route rewrite) ---
+  const queryPath = req.query?.__path;
+  const fromQuery =
+    typeof queryPath === 'string'
+      ? queryPath
+      : Array.isArray(queryPath)
+      ? queryPath[0]
+      : undefined;
+
+  // Also check raw URL query string for __path (in case req.query isn't populated yet)
+  const fromUrlMatch = rawUrl.match(/[?&]__path=([^&]*)/);
+  const fromUrl = fromUrlMatch ? decodeURIComponent(fromUrlMatch[1]) : undefined;
+
+  const pathParam = fromQuery ?? fromUrl;
+
+  if (pathParam && pathParam.trim()) {
+    let p = pathParam.trim();
+    if (!p.startsWith('/')) p = '/' + p;
+    return p; // Use exactly as-is — already the correct full path (e.g. /api/health)
+  }
+
+  // --- Step 2: Parse from req.url ---
+  if (rawUrl) {
+    // Handle full URLs (e.g. https://api.schedley.com/api/health)
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+      try {
+        return new URL(rawUrl).pathname;
+      } catch {
+        // fall through
+      }
+    }
+    // Normal path-only URL
+    const p = rawUrl.split('?')[0];
+    if (p && p !== '/index') return p;
+  }
+
+  // --- Step 3: Fallback to req.path ---
+  if (typeof req.path === 'string' && req.path.trim()) {
+    const p = req.path.trim();
+    return p.startsWith('/') ? p : '/' + p;
+  }
+
+  return '/';
+}
 
 function handler(
   req: {
@@ -50,112 +103,52 @@ function handler(
     method?: string;
     headers?: Record<string, string | string[] | undefined>;
     query?: Record<string, string | string[]>;
-  } & unknown,
+    path?: string;
+  } & Record<string, unknown>,
   res: unknown,
 ): void {
-  const rawUrl = typeof (req as { url?: string }).url === 'string' ? (req as { url: string }).url : '';
-  let pathname = rawUrl.split('?')[0];
-  // If Vercel passes full URL (e.g. https://api.schedley.com/api/health), extract pathname
-  if (pathname && (pathname.startsWith('http://') || pathname.startsWith('https://'))) {
-    try {
-      const u = new URL(pathname);
-      pathname = u.pathname || '/';
-    } catch {
-      pathname = pathname.split('?')[0];
-    }
-  }
+  const rawUrl = typeof req.url === 'string' ? req.url : '';
 
-  // Vercel rewrite sends original path as __path query param. Read from every possible source:
-  // 1. req.query.__path (when shouldAddHelpers is true)
-  // 2. req.url query string (when raw request has ?__path=...)
-  // 3. x-invoke-path / x-url / x-vercel-url headers (some runtimes set these)
-  const queryPath = req.query && (req.query.__path as string | string[] | undefined);
-  const fromQuery =
-    typeof queryPath === 'string' ? queryPath : Array.isArray(queryPath) ? queryPath[0] : undefined;
-  const fromUrlMatch = rawUrl.match(/[?&]__path=([^&]*)/);
-  const fromUrl = fromUrlMatch ? fromUrlMatch[1] : null;
-  const getHeader = (name: string): string | undefined => {
-    const h = req.headers?.[name.toLowerCase()] ?? req.headers?.[name];
-    if (typeof h === 'string') return h;
-    if (Array.isArray(h) && h[0]) return h[0];
-    return undefined;
-  };
-  const fromHeader =
-    getHeader('x-invoke-path') ??
-    getHeader('x-url') ??
-    getHeader('x-vercel-original-url') ??
-    (() => {
-      const vurl = getHeader('x-vercel-url');
-      if (vurl) {
-        try {
-          const path = new URL(vurl.startsWith('http') ? vurl : `https://x${vurl}`).pathname;
-          return path || undefined;
-        } catch {
-          return undefined;
-        }
-      }
-      return undefined;
-    })();
+  // Resolve the true pathname
+  let pathname = resolvePathname(req);
 
-  const pathParam = fromQuery ?? fromUrl ?? fromHeader;
-
-  if (pathParam != null && String(pathParam).trim() !== '') {
-    try {
-      pathname = decodeURIComponent(String(pathParam).trim());
-    } catch {
-      pathname = String(pathParam).trim();
-    }
-    if (pathname && !pathname.startsWith('/')) pathname = '/' + pathname;
-  }
-
-  // If path is still /index or empty (e.g. Vercel didn't pass __path), treat as root so at least /api works
-  if (!pathname || pathname === '/index') {
-    pathname = '/';
-  }
-
-  // Ensure /api prefix for non-api paths (e.g. / -> /api, /health -> /api/health)
-  if (pathname && !pathname.startsWith('/api')) {
-    pathname = '/api' + (pathname.startsWith('/') ? pathname : '/' + pathname);
-  }
-
-  // Normalize trailing slash so /api/ and /api both hit GET /api
-  if (pathname && pathname.length > 1 && pathname.endsWith('/')) {
+  // Normalize trailing slash (but keep bare "/")
+  if (pathname.length > 1 && pathname.endsWith('/')) {
     pathname = pathname.slice(0, -1);
   }
 
-  // Build final URL for Express: pathname + query (without __path)
+  // Build query string, stripping __path
   let queryStr = '';
   if (req.query && typeof req.query === 'object') {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(req.query)) {
       if (k === '__path') continue;
-      if (v !== undefined && v !== null)
+      if (v !== undefined && v !== null) {
         params.set(k, Array.isArray(v) ? v[0] : String(v));
+      }
     }
     queryStr = params.toString();
   } else if (rawUrl.includes('?')) {
-    const params = new URLSearchParams(rawUrl.slice(rawUrl.indexOf('?')));
+    const params = new URLSearchParams(rawUrl.slice(rawUrl.indexOf('?') + 1));
     params.delete('__path');
     queryStr = params.toString();
   }
+
   const resolvedUrl = pathname + (queryStr ? '?' + queryStr : '');
 
-  // Force Express to see this URL: remove any getter then define (Vercel may use getters)
-  const reqRecord = req as Record<string, unknown>;
+  console.log(`[Schedley] Vercel request: rawUrl="${rawUrl}" -> resolvedUrl="${resolvedUrl}"`);
+
+  // Overwrite req.url so Express sees the correct path
   try {
-    delete reqRecord.url;
+    delete req.url;
     Object.defineProperty(req, 'url', { value: resolvedUrl, writable: true, configurable: true });
   } catch {
-    reqRecord.url = resolvedUrl;
+    req.url = resolvedUrl;
   }
-  if ('originalUrl' in req) {
-    try {
-      delete (req as Record<string, unknown>).originalUrl;
-      Object.defineProperty(req, 'originalUrl', { value: resolvedUrl, writable: true, configurable: true });
-    } catch {
-      (req as Record<string, unknown>).originalUrl = resolvedUrl;
-    }
-  } else {
+  try {
+    delete (req as Record<string, unknown>).originalUrl;
+    Object.defineProperty(req, 'originalUrl', { value: resolvedUrl, writable: true, configurable: true });
+  } catch {
     (req as Record<string, unknown>).originalUrl = resolvedUrl;
   }
 
@@ -165,11 +158,15 @@ function handler(
       expressApp(req, res);
     })
     .catch((err) => {
-      console.error('[Schedley] Database connection failed, API not ready:', err?.message ?? err);
-      const resObj = res as { statusCode?: number; setHeader?: (a: string, b: string) => void; end?: (s: string) => void };
-      if (resObj.setHeader) resObj.setHeader('Content-Type', 'application/json');
-      if (typeof resObj.statusCode !== 'undefined') resObj.statusCode = 503;
-      if (resObj.end) resObj.end(JSON.stringify({ status: 'error', message: 'Service unavailable (database not connected)' }));
+      console.error('[Schedley] Database connection failed:', err?.message ?? err);
+      const r = res as {
+        statusCode?: number;
+        setHeader?: (a: string, b: string) => void;
+        end?: (s: string) => void;
+      };
+      if (r.setHeader) r.setHeader('Content-Type', 'application/json');
+      if (typeof r.statusCode !== 'undefined') r.statusCode = 503;
+      if (r.end) r.end(JSON.stringify({ status: 'error', message: 'Service unavailable (database not connected)' }));
     });
 }
 

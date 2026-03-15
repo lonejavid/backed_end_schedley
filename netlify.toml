@@ -8,7 +8,7 @@
   node_bundler = "none"
   external_node_modules = ["pg", "sql.js", "bcrypt"]
   # Include built Nest app so server.js can require('./dist/main.js') at runtime
-  included_files = ["dist/**"]
+  included_files = ["netlify/functions/dist/**"]
 
 # Redirect all routes to the serverless function
 [[redirects]]

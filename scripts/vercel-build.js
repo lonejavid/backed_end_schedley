@@ -74,7 +74,7 @@ fs.writeFileSync(
       routes: [
         { handle: 'filesystem' },
         { handle: 'miss' },
-        { src: '/(.*)', dest: '/index/$1' },
+        { src: '/(.*)', dest: '/index/$1', check: true },
       ],
     },
     null,

@@ -1,17 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "buildCommand": "node scripts/vercel-build.js",
-  "functions": {
-    "dist/main.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "dist/main.js"
-    }
-  ]
+  "buildCommand": "node scripts/vercel-build.js"
 }

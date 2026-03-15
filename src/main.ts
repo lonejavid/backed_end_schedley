@@ -136,9 +136,12 @@ function handler(
   // Resolve the true pathname
   let pathname = resolvePathname(req);
 
-  // Nest has setGlobalPrefix('api'), so it only serves /api, /api/health, etc. Map / and /index to /api.
+  // Nest has setGlobalPrefix('api'), so it only serves /api, /api/health, etc.
   if (pathname === '/' || pathname === '/index') {
     pathname = '/api';
+  } else if (pathname && !pathname.startsWith('/api')) {
+    // When function is at api/health.func, Vercel may pass path as /health; prepend /api.
+    pathname = '/api' + (pathname.startsWith('/') ? pathname : '/' + pathname);
   }
 
   // Normalize trailing slash (but keep bare "/")

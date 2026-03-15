@@ -27,6 +27,11 @@ import { Integration } from './integrations/entities/integration.entity';
       useFactory: (config: ConfigService) => {
         const useSqlite = config.get<boolean>('database.useSqlite');
         const entities = [User, EventType, Availability, Meeting, Integration];
+        // On Vercel/production, disable synchronize to avoid pg "client already executing" deprecation
+        // (TypeORM runs parallel metadata queries during sync). Run migrations separately in production.
+        const isVercel = process.env.VERCEL === '1';
+        const synchronize = useSqlite ? true : !isVercel;
+
         if (useSqlite) {
           // SQLite with file persistence so integrations (e.g. Google tokens) survive restarts and re-login.
           const sqlitePath = config.get<string>('database.sqlitePath') ?? 'schedley.sqlite';
@@ -44,7 +49,7 @@ import { Integration } from './integrations/entities/integration.entity';
             type: 'postgres',
             url,
             entities,
-            synchronize: true,
+            synchronize,
             ssl: config.get<string>('database.ssl') === 'true' ? { rejectUnauthorized: false } : false,
           };
         }
@@ -56,7 +61,7 @@ import { Integration } from './integrations/entities/integration.entity';
           password: String(config.get('database.password') ?? 'postgres'),
           database: String(config.get('database.database') ?? 'schedley'),
           entities,
-          synchronize: true,
+          synchronize,
           ssl: config.get<string>('database.ssl') === 'true' ? { rejectUnauthorized: false } : false,
         };
       },

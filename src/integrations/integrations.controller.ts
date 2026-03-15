@@ -53,7 +53,7 @@ export class IntegrationsController {
     @Query('state') state: string,
     @Res() res: Response,
   ) {
-    const frontendOrigin = this.config.get<string>('frontend.origin') || 'http://localhost:5173';
+    const frontendOrigin = this.config.get<string>('frontend.origin') || 'http://localhost:3000';
     if (!code || !state) {
       return res.redirect(`${frontendOrigin}/app/integrations?error=missing_code`);
     }

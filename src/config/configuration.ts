@@ -28,6 +28,6 @@ export default () => ({
       'http://localhost:8000/api/integration/google/callback',
   },
   frontend: {
-    origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+    origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000',
   },
 });

@@ -56,7 +56,8 @@ export class AuthController {
     if (payload.expiresAt != null) {
       params.set('expiresAt', String(payload.expiresAt));
     }
-    res.redirect(`${frontendOrigin}/oauth-success?${params.toString()}`);
+    // Use hash so token is never in the query string (not sent to server, easy to strip in frontend)
+    res.redirect(`${frontendOrigin}/oauth-success#${params.toString()}`);
   }
 
   @Get('me')
@@ -71,7 +72,27 @@ export class AuthController {
         username: user.username,
         email: user.email,
         timezone: user.timezone,
+        imageUrl: user.imageUrl ?? undefined,
         isApproved: Number(user.isApproved) === 1,
+      },
+    };
+  }
+
+  @Post('setup-complete')
+  @UseGuards(JwtAuthGuard)
+  async setupComplete(@Req() req: { user: { id: string } }) {
+    await this.usersService.setApproved(req.user.id, 1);
+    const user = await this.usersService.findOne(req.user.id);
+    if (!user) return { user: null };
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        timezone: user.timezone,
+        imageUrl: user.imageUrl ?? undefined,
+        isApproved: true,
       },
     };
   }

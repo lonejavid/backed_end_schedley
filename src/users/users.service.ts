@@ -31,6 +31,14 @@ export class UsersService {
     await this.repo.update({ id: userId }, { googleId });
   }
 
+  async setImageUrl(userId: string, imageUrl: string): Promise<void> {
+    await this.repo.update({ id: userId }, { imageUrl });
+  }
+
+  async setApproved(userId: string, approved: 0 | 1): Promise<void> {
+    await this.repo.update({ id: userId }, { isApproved: approved });
+  }
+
   async remove(id: string): Promise<void> {
     await this.repo.delete(id);
   }

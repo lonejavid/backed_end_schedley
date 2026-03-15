@@ -12,6 +12,7 @@ import { EventTypesService } from '../event-types/event-types.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { MeetingsService } from '../meetings/meetings.service';
 import { CreateMeetingDto } from '../meetings/dto/create-meeting.dto';
+import { ContactDto } from './dto/contact.dto';
 import { User } from '../users/entities/user.entity';
 import { EventType } from '../event-types/entities/event-type.entity';
 
@@ -134,5 +135,12 @@ export class PublicController {
         meetLink: meeting.meetLink ?? null,
       },
     };
+  }
+
+  /** POST /api/contact – contact form submission (no auth). Frontend: Contact Us page. */
+  @Post('contact')
+  async submitContact(@Body() dto: ContactDto) {
+    // Optional: persist to DB or send email here. For now we validate and acknowledge.
+    return { message: 'Thank you for your message. We will get back to you soon.' };
   }
 }

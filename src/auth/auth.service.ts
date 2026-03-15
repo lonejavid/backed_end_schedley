@@ -30,6 +30,12 @@ export class AuthService {
     return this.usersService.findOne(id);
   }
 
+  /** Generate a random avatar profile icon URL (unique per seed). */
+  private randomAvatarUrl(seed: string): string {
+    const encoded = encodeURIComponent(seed.trim() || String(Date.now()));
+    return `https://api.dicebear.com/7.x/lorelei/svg?seed=${encoded}&size=128`;
+  }
+
   async register(name: string, email: string, password: string): Promise<User> {
     const existing = await this.usersService.findByEmail(email);
     if (existing) {
@@ -41,19 +47,21 @@ export class AuthService {
       ? `${username}${Date.now().toString(36)}`
       : username;
     const passwordHash = await bcrypt.hash(password, 10);
+    const imageUrl = this.randomAvatarUrl(email);
     return this.usersService.create({
       name,
       email,
       username: finalUsername,
       passwordHash,
+      imageUrl,
       timezone: 'UTC',
-      isApproved: 1,
+      isApproved: 0,
     });
   }
 
   async login(user: User): Promise<{
     message: string;
-    user: { id: string; name: string; username: string; email: string; isApproved?: boolean };
+    user: { id: string; name: string; username: string; email: string; imageUrl?: string | null; isApproved?: boolean };
     accessToken: string;
     expiresAt: number;
   }> {
@@ -71,6 +79,7 @@ export class AuthService {
         name: user.name,
         username: user.username,
         email: user.email,
+        imageUrl: user.imageUrl ?? undefined,
         isApproved: Number(user.isApproved) === 1,
       },
       accessToken,
@@ -82,15 +91,19 @@ export class AuthService {
     id: string;
     email: string;
     name?: string;
+    picture?: string | null;
   }): Promise<{
     message: string;
-    user: { id: string; name: string; username: string; email: string; isApproved?: boolean };
+    user: { id: string; name: string; username: string; email: string; imageUrl?: string | null; isApproved?: boolean };
     accessToken: string;
     expiresAt: number;
   }> {
     let user = await this.usersService.findByEmail(profile.email);
     if (user) {
       await this.usersService.setGoogleId(user.id, profile.id);
+      if (profile.picture) {
+        await this.usersService.setImageUrl(user.id, profile.picture);
+      }
     } else {
       const username = this.emailToUsername(profile.email);
       const existingUsername = await this.usersService.findByUsername(username);
@@ -103,12 +116,13 @@ export class AuthService {
         username: finalUsername,
         passwordHash: null,
         googleId: profile.id,
+        imageUrl: profile.picture || this.randomAvatarUrl(profile.email),
         timezone: 'UTC',
         isApproved: 0,
       });
     }
-    // Do NOT mark Google as connected here – user must explicitly connect via Integrations
-    // so we get calendar scope and can sync events. See integration/google/authorize flow.
+    // Refresh user so imageUrl is current after setImageUrl
+    user = await this.usersService.findOne(user.id) ?? user;
     return this.login(user);
   }
 

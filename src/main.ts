@@ -72,7 +72,21 @@ function handler(
     return undefined;
   };
   const fromHeader =
-    getHeader('x-invoke-path') ?? getHeader('x-url') ?? getHeader('x-vercel-original-url');
+    getHeader('x-invoke-path') ??
+    getHeader('x-url') ??
+    getHeader('x-vercel-original-url') ??
+    (() => {
+      const vurl = getHeader('x-vercel-url');
+      if (vurl) {
+        try {
+          const path = new URL(vurl.startsWith('http') ? vurl : `https://x${vurl}`).pathname;
+          return path || undefined;
+        } catch {
+          return undefined;
+        }
+      }
+      return undefined;
+    })();
 
   const pathParam = fromQuery ?? fromUrl ?? fromHeader;
 
@@ -83,6 +97,11 @@ function handler(
       pathname = String(pathParam).trim();
     }
     if (pathname && !pathname.startsWith('/')) pathname = '/' + pathname;
+  }
+
+  // If path is still /index or empty (e.g. Vercel didn't pass __path), treat as root so at least /api works
+  if (!pathname || pathname === '/index') {
+    pathname = '/';
   }
 
   // Ensure /api prefix for non-api paths (e.g. / -> /api, /health -> /api/health)

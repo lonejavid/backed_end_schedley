@@ -1,0 +1,24 @@
+# Netlify config for NestJS backend (Schedley API)
+# Build: compile Nest so dist/ exists; functions run the app via serverless-http
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "none"
+  external_node_modules = ["pg", "sql.js", "bcrypt"]
+
+# Rewrite /api/* to the serverless function (path is preserved in event)
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/server"
+  status = 200
+  force = true
+
+# /health -> /api/health then handled by function
+[[redirects]]
+  from = "/health"
+  to = "/api/health"
+  status = 200
+  force = true

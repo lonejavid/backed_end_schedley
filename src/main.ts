@@ -118,6 +118,11 @@ function handler(
     pathname = '/api' + (pathname.startsWith('/') ? pathname : '/' + pathname);
   }
 
+  // Normalize trailing slash so /api/ and /api both hit GET /api
+  if (pathname && pathname.length > 1 && pathname.endsWith('/')) {
+    pathname = pathname.slice(0, -1);
+  }
+
   // Build final URL for Express: pathname + query (without __path)
   let queryStr = '';
   if (req.query && typeof req.query === 'object') {

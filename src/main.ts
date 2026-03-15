@@ -37,6 +37,24 @@ export async function bootstrap(): Promise<INestApplication> {
   return app;
 }
 
+// Cached app for Vercel serverless (single function)
+let appPromise: Promise<INestApplication> | null = null;
+function getApp(): Promise<INestApplication> {
+  if (!appPromise) appPromise = bootstrap();
+  return appPromise;
+}
+
+// Default export for Vercel: must be a function or server
+export default async (req: any, res: any): Promise<void> => {
+  const app = await getApp();
+  const expressApp = app.getHttpAdapter().getInstance();
+  return new Promise<void>((resolve, reject) => {
+    res.on('finish', () => resolve());
+    res.on('error', reject);
+    expressApp(req, res);
+  });
+};
+
 // When run directly (e.g. node dist/main.js), start the HTTP server
 if (require.main === module) {
   bootstrap().then((app) => {

@@ -113,6 +113,11 @@ function handler(
   // Resolve the true pathname
   let pathname = resolvePathname(req);
 
+  // Nest has setGlobalPrefix('api'), so it only serves /api, /api/health, etc. Map / and /index to /api.
+  if (pathname === '/' || pathname === '/index') {
+    pathname = '/api';
+  }
+
   // Normalize trailing slash (but keep bare "/")
   if (pathname.length > 1 && pathname.endsWith('/')) {
     pathname = pathname.slice(0, -1);

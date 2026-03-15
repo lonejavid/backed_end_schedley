@@ -41,7 +41,8 @@ export async function bootstrap(): Promise<INestApplication> {
 if (require.main === module) {
   bootstrap().then((app) => {
     const config = app.get(ConfigService);
-    const port = config.get<number>('port') ?? 5000;
+    // Vercel sets PORT; otherwise use config or default
+    const port = Number(process.env.PORT) || config.get<number>('port') ?? 5000;
     return app.listen(port).then(() => {
       console.log(`[Schedley] Listening on port ${port}`);
     });

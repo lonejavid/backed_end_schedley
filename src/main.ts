@@ -55,6 +55,15 @@ function handler(
 ): void {
   const rawUrl = typeof (req as { url?: string }).url === 'string' ? (req as { url: string }).url : '';
   let pathname = rawUrl.split('?')[0];
+  // If Vercel passes full URL (e.g. https://api.schedley.com/api/health), extract pathname
+  if (pathname && (pathname.startsWith('http://') || pathname.startsWith('https://'))) {
+    try {
+      const u = new URL(pathname);
+      pathname = u.pathname || '/';
+    } catch {
+      pathname = pathname.split('?')[0];
+    }
+  }
 
   // Vercel rewrite sends original path as __path query param. Read from every possible source:
   // 1. req.query.__path (when shouldAddHelpers is true)

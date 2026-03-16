@@ -14,7 +14,7 @@ export async function bootstrap(): Promise<INestApplication> {
     mkdirSync(join(process.cwd(), 'data'), { recursive: true });
   }
   const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', { exclude: ['/'] });
   console.log('[Schedley] Database connected, API ready');
   const config = app.get(ConfigService);
   const frontendOrigin = config.get<string>('frontend.origin');

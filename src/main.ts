@@ -16,7 +16,6 @@ async function bootstrap() {
     mkdirSync(join(process.cwd(), 'data'), { recursive: true });
   }
   const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api', { exclude: ['/'] });
   console.log('[Schedley] Database connected, API ready');
   const config = app.get(ConfigService);
   const port = Number(process.env.PORT) || (config.get<number>('port') ?? 8000);

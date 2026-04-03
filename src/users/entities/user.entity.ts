@@ -42,6 +42,9 @@ export class User {
   @Column({ name: 'google_id', type: 'varchar', nullable: true })
   googleId: string | null;
 
+  @Column({ name: 'setup_step', type: 'int', default: 0 })
+  setupStep: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

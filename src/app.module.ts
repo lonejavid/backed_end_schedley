@@ -18,6 +18,7 @@ import { EventType } from './event-types/entities/event-type.entity';
 import { Availability } from './availability/entities/availability.entity';
 import { Meeting } from './meetings/entities/meeting.entity';
 import { Integration } from './integrations/entities/integration.entity';
+import { OtpChallenge } from './auth/entities/otp-challenge.entity';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { Integration } from './integrations/entities/integration.entity';
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => {
         const useSqlite = config.get<boolean>('database.useSqlite');
-        const entities = [User, EventType, Availability, Meeting, Integration];
+        const entities = [User, EventType, Availability, Meeting, Integration, OtpChallenge];
         // On Vercel/production, disable synchronize to avoid pg "client already executing" deprecation
         // (TypeORM runs parallel metadata queries during sync). Run migrations separately in production.
         const isVercel = process.env.VERCEL === '1';

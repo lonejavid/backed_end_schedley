@@ -8,6 +8,12 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UnauthorizedException } from '@nestjs/common';
+import { SignupSendOtpDto } from './dto/signup-send-otp.dto';
+import { SignupVerifyDto } from './dto/signup-verify.dto';
+import { ForgotSendOtpDto } from './dto/forgot-send-otp.dto';
+import { ForgotResetDto } from './dto/forgot-reset.dto';
+import { LoginSendOtpDto } from './dto/login-send-otp.dto';
+import { OtpService } from './otp.service';
 
 @Controller('api/auth')
 export class AuthController {
@@ -15,7 +21,38 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
     private readonly config: ConfigService,
+    private readonly otpService: OtpService,
   ) {}
+
+  @Post('signup/send-otp')
+  async signupSendOtp(@Body() dto: SignupSendOtpDto) {
+    return this.otpService.sendSignupOtp(dto.name, dto.email, dto.password);
+  }
+
+  @Post('signup/verify')
+  async signupVerify(@Body() dto: SignupVerifyDto) {
+    return this.otpService.verifySignupAndLogin(dto.email, dto.code);
+  }
+
+  @Post('login/send-otp')
+  async loginSendOtp(@Body() dto: LoginSendOtpDto) {
+    return this.otpService.sendLoginOtp(dto.email);
+  }
+
+  @Post('login/verify-otp')
+  async loginVerifyOtp(@Body() dto: SignupVerifyDto) {
+    return this.otpService.verifyLoginOtp(dto.email, dto.code);
+  }
+
+  @Post('password/forgot/send-otp')
+  async forgotSendOtp(@Body() dto: ForgotSendOtpDto) {
+    return this.otpService.sendPasswordResetOtp(dto.email);
+  }
+
+  @Post('password/forgot/reset')
+  async forgotReset(@Body() dto: ForgotResetDto) {
+    return this.otpService.resetPasswordWithOtp(dto.email, dto.code, dto.newPassword);
+  }
 
   @Post('register')
   async register(@Body() dto: RegisterDto) {
@@ -74,6 +111,8 @@ export class AuthController {
         timezone: user.timezone,
         imageUrl: user.imageUrl ?? undefined,
         isApproved: Number(user.isApproved) === 1,
+        setupStep: user.setupStep ?? 0,
+        passwordLoginEnabled: !!user.passwordHash,
       },
     };
   }
@@ -82,6 +121,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async setupComplete(@Req() req: { user: { id: string } }) {
     await this.usersService.setApproved(req.user.id, 1);
+    await this.usersService.setSetupStep(req.user.id, 4);
     const user = await this.usersService.findOne(req.user.id);
     if (!user) return { user: null };
     return {
@@ -93,8 +133,21 @@ export class AuthController {
         timezone: user.timezone,
         imageUrl: user.imageUrl ?? undefined,
         isApproved: true,
+        setupStep: 4,
       },
     };
+  }
+
+  @Post('setup-progress')
+  @UseGuards(JwtAuthGuard)
+  async setupProgress(
+    @Req() req: { user: { id: string } },
+    @Body() body: { step: number },
+  ) {
+    const step = typeof body.step === 'number' ? body.step : 0;
+    const clamped = Math.max(0, Math.min(4, Math.floor(step)));
+    await this.usersService.setSetupStep(req.user.id, clamped);
+    return { step: clamped };
   }
 
   @Post('delete-account')

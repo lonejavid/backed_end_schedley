@@ -20,7 +20,7 @@ export class AuthService {
   ) {}
 
   async validateUserByEmail(email: string, password: string): Promise<User | null> {
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmailNormalized(email);
     if (!user?.passwordHash) return null;
     const ok = await bcrypt.compare(password, user.passwordHash);
     return ok ? user : null;
@@ -30,14 +30,37 @@ export class AuthService {
     return this.usersService.findOne(id);
   }
 
-  /** Generate a random avatar profile icon URL (unique per seed). */
+  /** Avatar URL from dicebear (seed controls look; use a fresh seed per signup for variety). */
   private randomAvatarUrl(seed: string): string {
     const encoded = encodeURIComponent(seed.trim() || String(Date.now()));
-    return `https://api.dicebear.com/7.x/lorelei/svg?seed=${encoded}&size=128`;
+    return `https://api.dicebear.com/7.x/lorelei/png?seed=${encoded}&size=128`;
+  }
+
+  private newAvatarSeed(): string {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      return `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+    }
   }
 
   async register(name: string, email: string, password: string): Promise<User> {
-    const existing = await this.usersService.findByEmail(email);
+    const norm = email.trim().toLowerCase();
+    const existing = await this.usersService.findByEmailNormalized(norm);
+    if (existing) {
+      throw new ConflictException('Email already registered');
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    return this.createUserWithPasswordHash(name.trim(), norm, passwordHash);
+  }
+
+  /** Create user after signup OTP verified (password already bcrypt-hashed). */
+  async createUserWithPasswordHash(
+    name: string,
+    email: string,
+    passwordHash: string,
+  ): Promise<User> {
+    const existing = await this.usersService.findByEmailNormalized(email);
     if (existing) {
       throw new ConflictException('Email already registered');
     }
@@ -46,8 +69,7 @@ export class AuthService {
     const finalUsername = existsUsername
       ? `${username}${Date.now().toString(36)}`
       : username;
-    const passwordHash = await bcrypt.hash(password, 10);
-    const imageUrl = this.randomAvatarUrl(email);
+    const imageUrl = this.randomAvatarUrl(this.newAvatarSeed());
     return this.usersService.create({
       name,
       email,
@@ -61,7 +83,16 @@ export class AuthService {
 
   async login(user: User): Promise<{
     message: string;
-    user: { id: string; name: string; username: string; email: string; imageUrl?: string | null; isApproved?: boolean };
+    user: {
+      id: string;
+      name: string;
+      username: string;
+      email: string;
+      imageUrl?: string | null;
+      isApproved?: boolean;
+      setupStep?: number;
+      passwordLoginEnabled?: boolean;
+    };
     accessToken: string;
     expiresAt: number;
   }> {
@@ -81,6 +112,8 @@ export class AuthService {
         email: user.email,
         imageUrl: user.imageUrl ?? undefined,
         isApproved: Number(user.isApproved) === 1,
+        setupStep: user.setupStep ?? 0,
+        passwordLoginEnabled: !!user.passwordHash,
       },
       accessToken,
       expiresAt: Math.floor(Date.now() / 1000) + expiresInSeconds,
@@ -98,25 +131,26 @@ export class AuthService {
     accessToken: string;
     expiresAt: number;
   }> {
-    let user = await this.usersService.findByEmail(profile.email);
+    const profileEmail = profile.email.trim().toLowerCase();
+    let user = await this.usersService.findByEmailNormalized(profileEmail);
     if (user) {
       await this.usersService.setGoogleId(user.id, profile.id);
       if (profile.picture) {
         await this.usersService.setImageUrl(user.id, profile.picture);
       }
     } else {
-      const username = this.emailToUsername(profile.email);
+      const username = this.emailToUsername(profileEmail);
       const existingUsername = await this.usersService.findByUsername(username);
       const finalUsername = existingUsername
         ? `${username}${Date.now().toString(36)}`
         : username;
       user = await this.usersService.create({
-        name: profile.name || profile.email.split('@')[0],
-        email: profile.email,
+        name: profile.name || profileEmail.split('@')[0],
+        email: profileEmail,
         username: finalUsername,
         passwordHash: null,
         googleId: profile.id,
-        imageUrl: profile.picture || this.randomAvatarUrl(profile.email),
+        imageUrl: profile.picture || this.randomAvatarUrl(this.newAvatarSeed()),
         timezone: 'UTC',
         isApproved: 0,
       });

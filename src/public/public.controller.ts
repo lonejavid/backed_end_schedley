@@ -6,13 +6,18 @@ import {
   Param,
   Query,
   NotFoundException,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { format, addDays } from 'date-fns';
 import { EventTypesService } from '../event-types/event-types.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { MeetingsService } from '../meetings/meetings.service';
 import { CreateMeetingDto } from '../meetings/dto/create-meeting.dto';
 import { ContactDto } from './dto/contact.dto';
+import { ContactService } from './contact.service';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
 import { EventType } from '../event-types/entities/event-type.entity';
 
@@ -65,6 +70,7 @@ export class PublicController {
     private readonly eventTypesService: EventTypesService,
     private readonly availabilityService: AvailabilityService,
     private readonly meetingsService: MeetingsService,
+    private readonly contactService: ContactService,
   ) {}
 
   /** GET /api/event/public/:username - list public events by username (frontend expects this) */
@@ -147,10 +153,11 @@ export class PublicController {
     };
   }
 
-  /** POST /api/contact – contact form submission (no auth). Frontend: Contact Us page. */
+  /** POST /api/contact – optional Bearer token; name/email omitted when signed in. */
   @Post('contact')
-  async submitContact(@Body() dto: ContactDto) {
-    // Optional: persist to DB or send email here. For now we validate and acknowledge.
-    return { message: 'Thank you for your message. We will get back to you soon.' };
+  @UseGuards(OptionalJwtAuthGuard)
+  async submitContact(@Body() dto: ContactDto, @Req() req: Request & { user?: User }) {
+    const user = req.user ?? null;
+    return this.contactService.submit(dto, user);
   }
 }

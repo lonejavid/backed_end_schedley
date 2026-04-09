@@ -122,6 +122,12 @@ export class PublicController {
     const toDate =
       to || format(addDays(new Date(), 14), 'yyyy-MM-dd');
     const slotInterval = event.timeSlotInterval || 30;
+    const busyMeetings =
+      await this.meetingsService.findScheduledMeetingsForEvent(eventId);
+    const busyIntervals = busyMeetings.map((m) => ({
+      start: m.startTime,
+      end: m.endTime,
+    }));
     const result = await this.availabilityService.getPublicSlots(
       eventId,
       ownerTimezone,
@@ -131,6 +137,7 @@ export class PublicController {
       fromDate,
       toDate,
       timezone,
+      busyIntervals,
     );
     return { message: 'OK', ...result };
   }

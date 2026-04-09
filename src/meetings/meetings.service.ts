@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -47,6 +48,11 @@ export class MeetingsService {
         'Provide startTime/endTime (UTC ISO) or dateStr/slotTime/eventDuration and guestTimezone',
       );
     }
+
+    if (startTime >= endTime) {
+      throw new BadRequestException('startTime must be before endTime');
+    }
+
     const questionAnswersText =
       dto.questionAnswers?.length ?
         '\n\n--- Invitee answers ---\n' +
@@ -54,17 +60,35 @@ export class MeetingsService {
         : '';
     const additionalInfo = (dto.additionalInfo ?? '').trim() + questionAnswersText;
 
-    const meeting = this.repo.create({
-      eventId: dto.eventId,
-      guestName: dto.guestName,
-      guestEmail: dto.guestEmail,
-      additionalInfo: additionalInfo || null,
-      startTime,
-      endTime,
-      guestTimezone,
-      status: 'SCHEDULED',
+    // Overlap check + insert in one transaction so two concurrent requests cannot double-book.
+    const saved = await this.repo.manager.transaction(async (manager) => {
+      const overlapping = await manager
+        .getRepository(Meeting)
+        .createQueryBuilder('m')
+        .where('m.eventId = :eventId', { eventId: dto.eventId })
+        .andWhere('m.status = :status', { status: 'SCHEDULED' })
+        .andWhere('m.startTime < :endTime', { endTime })
+        .andWhere('m.endTime > :startTime', { startTime })
+        .getOne();
+
+      if (overlapping) {
+        throw new ConflictException(
+          'This time slot is already booked. Please choose another time.',
+        );
+      }
+
+      const meeting = manager.getRepository(Meeting).create({
+        eventId: dto.eventId,
+        guestName: dto.guestName,
+        guestEmail: dto.guestEmail,
+        additionalInfo: additionalInfo || null,
+        startTime,
+        endTime,
+        guestTimezone,
+        status: 'SCHEDULED',
+      });
+      return manager.getRepository(Meeting).save(meeting);
     });
-    const saved = await this.repo.save(meeting);
 
     const eventRepo = this.repo.manager.getRepository(EventType);
     const event = await eventRepo.findOne({
@@ -98,6 +122,16 @@ export class MeetingsService {
       }
     }
     return saved;
+  }
+
+  /** Active bookings for an event — used to hide taken slots from public availability. */
+  async findScheduledMeetingsForEvent(
+    eventId: string,
+  ): Promise<Array<{ startTime: Date; endTime: Date }>> {
+    return this.repo.find({
+      where: { eventId, status: 'SCHEDULED' },
+      select: ['startTime', 'endTime'],
+    });
   }
 
   async findAllByUser(

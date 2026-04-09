@@ -62,6 +62,8 @@ export class AvailabilityService {
     fromDate: string,
     toDate: string,
     requestTimezone: string,
+    /** Existing SCHEDULED meetings for this event — slots that overlap are removed */
+    busyIntervals: Array<{ start: Date; end: Date }> = [],
   ): Promise<{ data: Array<{ day: string; dateStr: string; slots: string[]; isAvailable: boolean; timezone?: string }>; timezone: string }> {
     const from = parseISO(fromDate);
     const to = parseISO(toDate);
@@ -99,7 +101,13 @@ export class AvailabilityService {
         slotDuration,
         ownerTimezone,
       );
-      const slotsInRequestedTz = generated.map((s) =>
+      const freeSlots = generated.filter(
+        (slot) =>
+          !busyIntervals.some(
+            (b) => slot.start < b.end && slot.end > b.start,
+          ),
+      );
+      const slotsInRequestedTz = freeSlots.map((s) =>
         utcToLocalTimeString(s.start, requestTimezone),
       );
       result.push({

@@ -83,12 +83,14 @@ export class EventTypesService {
     username: string,
     slug: string,
   ): Promise<EventType | null> {
+    // Column is int (0 = public). Use numeric 0 — binding `false` becomes a PG boolean
+    // and `integer = boolean` fails on PostgreSQL, causing 500 on public event routes.
     return this.repo
       .createQueryBuilder('e')
       .innerJoin('e.user', 'u')
       .where('u.username = :username', { username })
       .andWhere('e.slug = :slug', { slug })
-      .andWhere('e.isPrivate = :isPrivate', { isPrivate: false })
+      .andWhere('e.isPrivate = :isPrivate', { isPrivate: 0 })
       .select(['e', 'u.id', 'u.name', 'u.username', 'u.imageUrl', 'u.timezone'])
       .getOne();
   }

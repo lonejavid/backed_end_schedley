@@ -13,6 +13,7 @@ import { EventType } from '../event-types/entities/event-type.entity';
 import { localTimeToUtc } from '../common/timezone/timezone.util';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { isGuestEmailDomainBlocked } from '../common/blocked-domains.util';
 
 @Injectable()
 export class MeetingsService {
@@ -23,6 +24,26 @@ export class MeetingsService {
   ) {}
 
   async createPublic(dto: CreateMeetingDto): Promise<Meeting> {
+    const eventRepo = this.repo.manager.getRepository(EventType);
+    const eventRules = await eventRepo.findOne({
+      where: { id: dto.eventId },
+      select: ['id', 'blockedDomains', 'accessSpecifier'],
+    });
+    if (!eventRules) {
+      throw new NotFoundException('Event not found');
+    }
+    if (
+      isGuestEmailDomainBlocked(
+        dto.guestEmail,
+        eventRules.accessSpecifier,
+        eventRules.blockedDomains,
+      )
+    ) {
+      throw new ForbiddenException(
+        'Bookings from this email domain are not allowed for this event.',
+      );
+    }
+
     let startTime: Date;
     let endTime: Date;
     const guestTimezone = dto.guestTimezone || 'UTC';
@@ -90,7 +111,6 @@ export class MeetingsService {
       return manager.getRepository(Meeting).save(meeting);
     });
 
-    const eventRepo = this.repo.manager.getRepository(EventType);
     const event = await eventRepo.findOne({
       where: { id: dto.eventId },
       select: ['id', 'title', 'description', 'userId'],

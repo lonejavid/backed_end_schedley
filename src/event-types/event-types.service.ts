@@ -20,6 +20,12 @@ export class EventTypesService {
         : typeof dto.questions === 'string'
           ? dto.questions
           : JSON.stringify(dto.questions);
+    const blockedStr =
+      dto.blockedDomains != null && dto.blockedDomains.length > 0
+        ? JSON.stringify(dto.blockedDomains)
+        : null;
+    const access =
+      dto.accessSpecifier === 'block_domains' ? 'block_domains' : 'allow_all';
     const event = this.repo.create({
       title: dto.title,
       description: dto.description ?? '',
@@ -28,6 +34,8 @@ export class EventTypesService {
       slug,
       userId,
       questions: questionsStr,
+      blockedDomains: blockedStr,
+      accessSpecifier: access,
     });
     return this.repo.save(event);
   }

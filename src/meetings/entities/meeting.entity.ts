@@ -45,6 +45,10 @@ export class Meeting {
   @Column({ name: 'calendar_event_id', type: 'varchar', nullable: true })
   calendarEventId: string | null;
 
+  /** Zoom API meeting id (for delete on cancel) */
+  @Column({ name: 'zoom_meeting_id', type: 'varchar', nullable: true })
+  zoomMeetingId: string | null;
+
   @Column({ type: 'varchar', default: 'SCHEDULED' })
   status: string;
 

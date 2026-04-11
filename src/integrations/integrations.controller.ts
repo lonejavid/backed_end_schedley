@@ -65,4 +65,35 @@ export class IntegrationsController {
       return res.redirect(`${frontendOrigin}/app/integrations?error=google_callback_failed`);
     }
   }
+
+  @Get('zoom/authorize')
+  async zoomAuthorize(@Query('state') state: string, @Res() res: Response) {
+    if (!state) {
+      return res.redirect(
+        `${this.config.get<string>('frontend.origin')}/app/integrations?error=missing_state`,
+      );
+    }
+    const url = this.integrationsService.getZoomAuthorizeRedirectUrl(state);
+    return res.redirect(url);
+  }
+
+  @Get('zoom/callback')
+  async zoomCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res() res: Response,
+  ) {
+    const frontendOrigin =
+      this.config.get<string>('frontend.origin') || 'http://localhost:3000';
+    if (!code || !state) {
+      return res.redirect(`${frontendOrigin}/app/integrations?error=missing_code`);
+    }
+    try {
+      await this.integrationsService.handleZoomCallback(code, state);
+      return res.redirect(`${frontendOrigin}/app/integrations?zoom=connected`);
+    } catch (e) {
+      console.error('Zoom OAuth callback error:', e);
+      return res.redirect(`${frontendOrigin}/app/integrations?error=zoom_callback_failed`);
+    }
+  }
 }

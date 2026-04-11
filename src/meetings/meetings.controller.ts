@@ -22,6 +22,10 @@ export class MeetingsController {
     @ReqUser('id') userId: string,
     @Param('meetingId') meetingId: string,
   ) {
-    return this.meetingsService.cancel(meetingId, userId);
+    const meeting = await this.meetingsService.cancel(meetingId, userId);
+    return {
+      message: 'Meeting cancelled successfully',
+      meeting,
+    };
   }
 }

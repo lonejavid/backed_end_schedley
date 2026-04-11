@@ -29,6 +29,13 @@ export default () => ({
       process.env.GOOGLE_CALENDAR_CALLBACK_URL ||
       'http://localhost:8000/api/integration/google/callback',
   },
+  zoom: {
+    clientId: process.env.ZOOM_CLIENT_ID,
+    clientSecret: process.env.ZOOM_CLIENT_SECRET,
+    callbackUrl:
+      process.env.ZOOM_CALLBACK_URL ||
+      'http://localhost:8000/api/integration/zoom/callback',
+  },
   frontend: {
     origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000',
   },

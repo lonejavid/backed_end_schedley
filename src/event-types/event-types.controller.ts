@@ -38,7 +38,11 @@ export class EventTypesController {
     @Body() body: { eventId: string },
   ) {
     const event = await this.eventTypesService.togglePrivacy(body.eventId, userId);
-    return { message: 'OK', event };
+    const isPrivate = Number(event.isPrivate) === 1;
+    const message = isPrivate
+      ? 'This event is now off'
+      : 'This event is now on';
+    return { message, event };
   }
 
   @Delete(':eventId')

@@ -107,6 +107,123 @@ export function contactConfirmationEmail(
   return { subject, html, text };
 }
 
+/**
+ * Fallback email when a booking cannot rely on Google Calendar invitations.
+ * For **Google Meet** events: the host’s calendar creates the event with Meet + `sendUpdates=all`, so Gmail
+ * sends the standard calendar invitation (Meet button, link, .ics) to the **guest** and notifies the
+ * **organizer** — we intentionally do **not** send this template in that case (see `MeetingsService.createPublic`).
+ * Use this for Zoom/Teams-only flows or when Calendar sync failed / is disconnected.
+ */
+export function publicBookingConfirmationEmail(params: {
+  guestName: string;
+  eventTitle: string;
+  startDisplay: string;
+  endDisplay: string;
+  timezoneNote: string;
+  /** e.g. Google Meet, Zoom, Microsoft Teams */
+  platformLabel: string;
+  /** Google Meet join URL when created via Calendar API */
+  meetingJoinUrl?: string | null;
+  /** Public booking page so guests can revisit details */
+  bookingPageUrl?: string | null;
+}): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const {
+    guestName,
+    eventTitle,
+    startDisplay,
+    endDisplay,
+    timezoneNote,
+    platformLabel,
+    meetingJoinUrl,
+    bookingPageUrl,
+  } = params;
+  const subject = `You're booked: ${eventTitle}`;
+  const safeName = escapeHtml(guestName);
+  const safeTitle = escapeHtml(eventTitle);
+  const safeStart = escapeHtml(startDisplay);
+  const safeEnd = escapeHtml(endDisplay);
+  const safeTz = escapeHtml(timezoneNote);
+  const safePlatform = escapeHtml(platformLabel);
+  const joinUrl = meetingJoinUrl?.trim() || null;
+  const bookUrl = bookingPageUrl?.trim() || null;
+  const safeJoinHref = joinUrl ? escapeHtmlAttr(joinUrl) : '';
+  const safeBookHref = bookUrl ? escapeHtmlAttr(bookUrl) : '';
+
+  const textLines = [
+    `Hi ${guestName},`,
+    '',
+    `Your meeting "${eventTitle}" is confirmed.`,
+    '',
+    `Video / location: ${platformLabel}`,
+    joinUrl ? `Join link: ${joinUrl}` : '',
+    !joinUrl && (platformLabel === 'Zoom' || platformLabel === 'Microsoft Teams')
+      ? 'A direct join link was not generated automatically. Check your calendar invite from the host, or use your booking page below for updates.'
+      : !joinUrl
+        ? 'If you do not see a join link above, check your calendar invite or ask the host.'
+        : '',
+    bookUrl ? `Booking page: ${bookUrl}` : '',
+    '',
+    `Starts: ${startDisplay}`,
+    `Ends: ${endDisplay}`,
+    timezoneNote ? `Timezone: ${timezoneNote}` : '',
+    '',
+    `— ${brandName}`,
+  ];
+
+  const text = textLines.filter(Boolean).join('\n');
+
+  const joinBlock = joinUrl
+    ? `
+              <p style="margin:20px 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6b8bad;">Join meeting</p>
+              <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#3d5a7a;">
+                <a href="${safeJoinHref}" style="color:#007aff;font-weight:600;word-break:break-all;">${escapeHtml(joinUrl)}</a>
+              </p>`
+    : `
+              <p style="margin:20px 0 8px 0;font-size:13px;line-height:1.55;color:#3d5a7a;">
+                ${
+                  platformLabel === 'Zoom' || platformLabel === 'Microsoft Teams'
+                    ? 'This event uses <strong style="color:#0a1628;">' +
+                      safePlatform +
+                      '</strong>. If no join link appears here, check the calendar invite from your host or open your booking page below.'
+                    : 'If you need a join link, check your calendar invite or contact the host.'
+                }
+              </p>`;
+
+  const bookingBlock = bookUrl
+    ? `
+              <p style="margin:16px 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6b8bad;">Booking page</p>
+              <p style="margin:0;font-size:15px;line-height:1.6;color:#3d5a7a;">
+                <a href="${safeBookHref}" style="color:#007aff;font-weight:600;word-break:break-all;">${escapeHtml(bookUrl)}</a>
+              </p>`
+    : '';
+
+  const bodyHtml = `
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#3d5a7a;">
+                Hi <strong style="color:#0a1628;">${safeName}</strong>,
+              </p>
+              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#3d5a7a;">
+                Your meeting <strong style="color:#0a1628;">${safeTitle}</strong> is confirmed.
+              </p>
+              <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6b8bad;">Video / location</p>
+              <p style="margin:0 0 16px 0;font-size:16px;font-weight:600;color:#0a1628;">${safePlatform}</p>
+              ${joinBlock}
+              ${bookingBlock}
+              <p style="margin:20px 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6b8bad;">Start</p>
+              <p style="margin:0 0 16px 0;font-size:16px;font-weight:600;color:#0a1628;">${safeStart}</p>
+              <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6b8bad;">End</p>
+              <p style="margin:0 0 16px 0;font-size:16px;font-weight:600;color:#0a1628;">${safeEnd}</p>
+              <p style="margin:0;font-size:13px;line-height:1.5;color:#6b8bad;">${safeTz}</p>
+  `.trim();
+
+  const html = emailShell({ title: 'Booking confirmed', bodyHtml });
+
+  return { subject, html, text };
+}
+
 /** Internal alert for new contact submissions. */
 export function contactAdminNotificationEmail(
   inquiryType: string,

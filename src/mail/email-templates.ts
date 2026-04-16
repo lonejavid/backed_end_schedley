@@ -107,6 +107,129 @@ export function contactConfirmationEmail(
   return { subject, html, text };
 }
 
+/** Sent to the applicant after they submit a careers application. */
+export function jobApplicationConfirmationEmail(
+  name: string,
+  jobTitle: string,
+): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const subject = `We received your application — ${jobTitle}`;
+  const safeName = escapeHtml(name);
+  const safeTitle = escapeHtml(jobTitle);
+  const text = [
+    `Hi ${name},`,
+    '',
+    `Thanks for your interest in joining ${brandName}. We received your application for:`,
+    jobTitle,
+    '',
+    'Our team will review it and reach out if there is a strong match.',
+    '',
+    `— ${brandName}`,
+  ].join('\n');
+
+  const bodyHtml = `
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#3d5a7a;">
+                Hi <strong style="color:#0a1628;">${safeName}</strong>,
+              </p>
+              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#3d5a7a;">
+                Thank you for applying. We’ve received your application and will review it carefully.
+              </p>
+              <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6b8bad;">Role</p>
+              <p style="margin:0 0 20px 0;">
+                <span style="display:inline-block;padding:8px 14px;background-color:#ecfdf5;border:1px solid rgba(16,185,129,0.28);border-radius:10px;font-size:14px;font-weight:600;color:#047857;">${safeTitle}</span>
+              </p>
+              <p style="margin:0;font-size:14px;line-height:1.6;color:#6b8bad;">
+                If your profile is a fit, someone from our team will contact you by email.
+              </p>
+  `.trim();
+
+  const html = emailShell({ title: 'Application received', bodyHtml });
+  return { subject, html, text };
+}
+
+/** Admin notification for a new job application (resume attached separately in SMTP). */
+export function jobApplicationAdminNotificationEmail(params: {
+  applicantName: string;
+  applicantEmail: string;
+  country: string;
+  experience: string;
+  jobTitle: string;
+  jobDepartment?: string;
+  jobId?: number;
+}): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const {
+    applicantName,
+    applicantEmail,
+    country,
+    experience,
+    jobTitle,
+    jobDepartment,
+    jobId,
+  } = params;
+  const subject = `[Careers] Application: ${jobTitle} — ${applicantName}`;
+  const safeName = escapeHtml(applicantName);
+  const safeEmail = escapeHtml(applicantEmail);
+  const safeCountry = escapeHtml(country);
+  const safeExp = escapeHtml(experience);
+  const safeTitle = escapeHtml(jobTitle);
+  const safeDept = jobDepartment ? escapeHtml(jobDepartment) : '';
+  const metaLines = [
+    `Name: ${applicantName}`,
+    `Email: ${applicantEmail}`,
+    `Country: ${country}`,
+    `Experience: ${experience}`,
+    `Role: ${jobTitle}`,
+    jobDepartment ? `Department: ${jobDepartment}` : '',
+    jobId != null ? `Job ID: ${jobId}` : '',
+  ].filter(Boolean);
+
+  const text = [
+    'New job application:',
+    '',
+    ...metaLines,
+    '',
+    'The resume is attached to this email as a PDF.',
+    '',
+    `— ${brandName} careers form`,
+  ].join('\n');
+
+  const deptBlock = jobDepartment
+    ? `<p style="margin:4px 0 0 0;font-size:14px;color:#3d5a7a;">Department: <strong>${safeDept}</strong></p>`
+    : '';
+  const idBlock =
+    jobId != null
+      ? `<p style="margin:4px 0 0 0;font-size:14px;color:#3d5a7a;">Job ID: <strong>${jobId}</strong></p>`
+      : '';
+
+  const bodyHtml = `
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#3d5a7a;">
+                A candidate submitted an application via the careers page.
+              </p>
+              <div style="padding:16px 18px;background-color:#e8f4fd;border-radius:12px;border:1px solid rgba(0,122,255,0.15);">
+                <p style="margin:0;font-size:14px;color:#3d5a7a;">Role: <strong style="color:#0a1628;">${safeTitle}</strong></p>
+                ${deptBlock}
+                ${idBlock}
+                <p style="margin:12px 0 0 0;font-size:14px;color:#3d5a7a;">Name: <strong style="color:#0a1628;">${safeName}</strong></p>
+                <p style="margin:4px 0 0 0;font-size:14px;color:#3d5a7a;">Email: <a href="mailto:${escapeHtmlAttr(applicantEmail)}" style="color:#007aff;text-decoration:none;">${safeEmail}</a></p>
+                <p style="margin:4px 0 0 0;font-size:14px;color:#3d5a7a;">Country: <strong>${safeCountry}</strong></p>
+                <p style="margin:4px 0 0 0;font-size:14px;color:#3d5a7a;">Experience: <strong>${safeExp}</strong></p>
+              </div>
+              <p style="margin:16px 0 0 0;font-size:13px;line-height:1.5;color:#6b8bad;">
+                Resume is attached as a PDF to this message.
+              </p>
+  `.trim();
+
+  const html = emailShell({ title: 'New job application', bodyHtml });
+  return { subject, html, text };
+}
+
 /**
  * Fallback email when a booking cannot rely on Google Calendar invitations.
  * For **Google Meet** events: the host’s calendar creates the event with Meet + `sendUpdates=all`, so Gmail

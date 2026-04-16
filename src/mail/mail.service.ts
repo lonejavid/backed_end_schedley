@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import type { Attachment } from 'nodemailer/lib/mailer';
 
 @Injectable()
 export class MailService {
@@ -27,7 +28,13 @@ export class MailService {
     }
   }
 
-  async sendMail(to: string, subject: string, html: string, text: string): Promise<void> {
+  async sendMail(
+    to: string,
+    subject: string,
+    html: string,
+    text: string,
+    attachments?: Attachment[],
+  ): Promise<void> {
     const from =
       this.config.get<string>('smtp.from') ||
       this.config.get<string>('smtp.user') ||
@@ -44,6 +51,7 @@ export class MailService {
       subject,
       text,
       html,
+      ...(attachments?.length ? { attachments } : {}),
     });
   }
 }

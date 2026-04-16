@@ -17,6 +17,8 @@ import { MeetingsService } from '../meetings/meetings.service';
 import { CreateMeetingDto } from '../meetings/dto/create-meeting.dto';
 import { ContactDto } from './dto/contact.dto';
 import { ContactService } from './contact.service';
+import { JobApplicationDto } from './dto/job-application.dto';
+import { CareerApplicationService } from './career-application.service';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
 import { EventType } from '../event-types/entities/event-type.entity';
@@ -71,6 +73,7 @@ export class PublicController {
     private readonly availabilityService: AvailabilityService,
     private readonly meetingsService: MeetingsService,
     private readonly contactService: ContactService,
+    private readonly careerApplicationService: CareerApplicationService,
   ) {}
 
   /** GET /api/event/public/:username - list public events by username (frontend expects this) */
@@ -166,5 +169,29 @@ export class PublicController {
   async submitContact(@Body() dto: ContactDto, @Req() req: Request & { user?: User }) {
     const user = req.user ?? null;
     return this.contactService.submit(dto, user);
+  }
+
+  /** GET /api/careers/applied-job-ids — when signed in, job IDs already applied for with this account’s email. */
+  @Get('careers/applied-job-ids')
+  @UseGuards(OptionalJwtAuthGuard)
+  async getAppliedCareerJobIds(@Req() req: Request & { user?: User }) {
+    const user = req.user ?? null;
+    const email = user?.email?.trim().toLowerCase();
+    if (!email) {
+      return { jobIds: [] as number[] };
+    }
+    const jobIds = await this.careerApplicationService.findJobIdsByEmail(email);
+    return { jobIds };
+  }
+
+  /** POST /api/careers/apply — optional Bearer; PDF resume as base64 (see JobApplicationDto). */
+  @Post('careers/apply')
+  @UseGuards(OptionalJwtAuthGuard)
+  async submitJobApplication(
+    @Body() dto: JobApplicationDto,
+    @Req() req: Request & { user?: User },
+  ) {
+    const user = req.user ?? null;
+    return this.careerApplicationService.submit(dto, user);
   }
 }

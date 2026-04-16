@@ -4,7 +4,11 @@ import { join } from 'path';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
+
+/** Max JSON body size (careers apply sends base64 PDF; 5 MB file ≈ 6.7 MB base64 + JSON overhead). */
+const JSON_BODY_LIMIT = '10mb';
 
 async function bootstrap() {
   const useSqlite = process.env.USE_SQLITE === 'true';
@@ -15,7 +19,9 @@ async function bootstrap() {
   if (useSqlite) {
     mkdirSync(join(process.cwd(), 'data'), { recursive: true });
   }
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(json({ limit: JSON_BODY_LIMIT }));
+  app.use(urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
   console.log('[Schedley] Database connected, API ready');
   const config = app.get(ConfigService);
   const port = Number(process.env.PORT) || (config.get<number>('port') ?? 8000);
